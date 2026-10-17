@@ -3,7 +3,7 @@ const STATUS = {todo:"할 일", in_progress:"진행 중", in_review:"리뷰", bl
 const PRIORITY = ["highest","high","medium","low","lowest"];
 const TYPE_LABEL = {project:"과제", item:"아이템", subitem:"서브"};
 const CHILD = {project:"item", item:"subitem"};
-const DAY = 24, NAME_W = 300;
+const DAY = 26, NAME_W = 280;
 
 let tree = [], tab = "gantt", selected = null;
 const $ = s => document.querySelector(s);
@@ -17,7 +17,7 @@ async function call(name, ...args) {
   if (!res.ok) { setStatus(res.error, true); throw new Error(res.error); }
   return res.data;
 }
-function setStatus(msg, err) { const s = $("#status"); s.textContent = msg; s.className = err ? "err" : ""; s.title = msg; }
+let _st; function setStatus(msg, err) { const s = $("#status"); s.textContent = msg; s.className = err ? "err" : ""; s.title = msg; clearTimeout(_st); _st = setTimeout(() => s.textContent = "", 5000); }
 
 function flatten(nodes, depth = 0, out = []) {
   for (const n of nodes) { out.push({...n, depth}); flatten(n.children, depth + 1, out); }
@@ -37,10 +37,12 @@ function span(n) {
   }
   return s ? [s, e || s] : null;
 }
-const badge = st => `<span class="badge" style="background:var(--${st})">${STATUS[st] || st}</span>`;
+const badge = st => `<span class="chip" style="--c:var(--${st})">${STATUS[st] || st}</span>`;
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const mmdd = s => s ? s.slice(5).replace("-", "/") : "";
 
 function render() {
-  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   const v = $("#view");
   if (tab === "gantt") v.innerHTML = renderGantt();
   else if (tab === "list") v.innerHTML = renderList();
@@ -54,29 +56,36 @@ function render() {
 
 function renderGantt() {
   const rows = flatten(tree);
-  if (!rows.length) return `<p style="padding:16px;color:var(--muted)">과제가 없습니다. 아래 입력창에 일정을 적거나 “+ 과제”를 누르세요.</p>`;
-  const today = iso(new Date());
+  if (!rows.length) return `<div class="empty">아직 일정이 없어요.<br>오른쪽 어시스턴트에게 말하거나 “＋ 과제”를 눌러 시작하세요.</div>`;
+  const today = todayISO();
   const spans = rows.map(r => span(r));
   const all = spans.filter(Boolean).flat().concat(today).sort();
   const start = iso(new Date(parse(all[0]).getTime() - 7 * 864e5));
   const end = iso(new Date(parse(all[all.length - 1]).getTime() + 21 * 864e5));
   const days = diffDays(start, end) + 1, W = days * DAY;
-  let ticks = "", months = "";
+  // weekend shading: one repeating 7-day gradient shared by all rows
+  const sw = parse(start).getUTCDay(), stops = [];
+  for (let i = 0; i < 7; i++) {
+    const wk = [0, 6].includes((sw + i) % 7), c = wk ? "var(--weekend)" : "transparent";
+    stops.push(`${c} ${i * DAY}px ${(i + 1) * DAY}px`);
+  }
+  const wk = `linear-gradient(90deg,${stops.join(",")})`;
+  let head = "";
   for (let i = 0; i < days; i++) {
     const d = new Date(parse(start).getTime() + i * 864e5);
-    if (d.getUTCDay() === 1) ticks += `<div class="g-tick" style="left:${i*DAY}px"></div>`;
-    if (d.getUTCDate() === 1 || i === 0) months += `<div class="g-month" style="left:${i*DAY}px">${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}</div>`;
+    if (d.getUTCDate() === 1 || i === 0) head += `<div class="g-month" style="left:${i*DAY}px">${d.getUTCFullYear()}년 ${d.getUTCMonth()+1}월</div>`;
+    if (d.getUTCDay() === 1) head += `<div class="g-wk" style="left:${i*DAY}px">${d.getUTCDate()}</div>`;
   }
   const todayX = diffDays(start, today) * DAY + DAY / 2;
-  let h = `<div class="gantt" style="grid-template-columns:${NAME_W}px ${W}px">`;
-  h += `<div class="g-name g-head">이름</div><div class="g-head g-track" style="position:sticky">${months}${ticks}</div>`;
+  let h = `<div class="gantt" style="grid-template-columns:${NAME_W}px ${W}px;--wk:${wk};--wkw:${7*DAY}px">`;
+  h += `<div class="g-name g-head">이름</div><div class="g-track g-head">${head}<div class="g-today" style="left:${todayX}px"><i class="g-today-h" style="bottom:-5px"></i></div></div>`;
   rows.forEach((r, i) => {
     const sp = spans[i];
-    h += `<div class="g-name type-${r.type}" data-key="${r.key}" style="padding-left:${8 + r.depth*16}px" title="${esc(r.title)}"><span class="key">${r.key}</span>${esc(r.title)}</div>`;
-    h += `<div class="g-track">${ticks}<div class="g-today" style="left:${todayX}px"></div>`;
+    h += `<div class="g-name type-${r.type}" data-key="${r.key}" style="padding-left:${14 + r.depth*18}px" title="${esc(r.title)}"><span class="key">${r.key}</span><span class="g-title">${esc(r.title)}</span></div>`;
+    h += `<div class="g-track"><div class="g-today" style="left:${todayX}px"></div>`;
     if (sp) {
-      const x = diffDays(start, sp[0]) * DAY, w = (diffDays(sp[0], sp[1]) + 1) * DAY;
-      h += `<div class="g-bar" data-key="${r.key}" style="left:${x}px;width:${w}px;background:var(--${r.status})" title="${esc(r.title)} ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div><span style="position:relative">${r.progress ? r.progress + "%" : ""}</span></div>`;
+      const x = diffDays(start, sp[0]) * DAY + 1, w = Math.max(DAY - 2, (diffDays(sp[0], sp[1]) + 1) * DAY - 2);
+      h += `<div class="g-bar${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px;--c:var(--${r.status})" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div></div>`;
     }
     h += `</div>`;
   });
@@ -85,8 +94,13 @@ function renderGantt() {
 
 function renderList() {
   const rows = flatten(tree);
-  let h = `<table><tr><th>키</th><th>제목</th><th>유형</th><th>상태</th><th>우선순위</th><th>담당</th><th>시작</th><th>마감</th><th>진행</th><th>예상(h)</th><th>라벨</th></tr>`;
-  for (const r of rows) h += `<tr class="row type-${r.type}" data-key="${r.key}"><td>${r.key}</td><td style="padding-left:${8 + r.depth*18}px">${esc(r.title)}</td><td>${TYPE_LABEL[r.type]}</td><td>${badge(r.status)}</td><td>${r.priority}</td><td>${esc(r.assignee)}</td><td>${r.start_date||""}</td><td>${r.due_date||""}</td><td>${r.progress}%</td><td>${r.estimate_h ?? ""}</td><td>${esc(r.labels)}</td></tr>`;
+  if (!rows.length) return `<div class="empty">아직 일정이 없어요.</div>`;
+  const t = todayISO();
+  let h = `<table><tr><th>제목</th><th>상태</th><th>담당</th><th>마감</th><th>진행</th></tr>`;
+  for (const r of rows) {
+    const late = r.due_date && r.due_date < t && r.status !== "done";
+    h += `<tr class="row type-${r.type}" data-key="${r.key}"><td class="t" style="padding-left:${14 + r.depth*20}px"><span class="key">${r.key}</span>${esc(r.title)}</td><td>${badge(r.status)}</td><td class="muted">${esc(r.assignee)}</td><td class="${late ? "overdue" : "muted"}">${mmdd(r.due_date)}</td><td class="muted">${r.progress ? r.progress + "%" : ""}</td></tr>`;
+  }
   return h + `</table>`;
 }
 
@@ -107,43 +121,58 @@ function find(key, nodes = tree) {
 }
 function select(key) { selected = key; render(); }
 
+// Anchor the popover just below the clicked row/bar (above it if there is no room), never on top of it.
+function placeDetail(d) {
+  const wrap = $("#view-wrap"), el = document.querySelector(`#view .g-bar[data-key="${selected}"]`) || document.querySelector(`#view [data-key="${selected}"]`);
+  d.style.top = d.style.left = d.style.right = d.style.bottom = "";
+  if (!el) { d.style.top = "14px"; d.style.right = "18px"; return; }
+  const w = wrap.getBoundingClientRect(), r = el.getBoundingClientRect(), W = d.offsetWidth, H = d.offsetHeight;
+  const cx = Math.max(r.left, w.left) + (Math.min(r.right, w.right) - Math.max(r.left, w.left)) / 2;
+  d.style.left = Math.max(10, Math.min(cx - w.left - W / 2, w.width - W - 10)) + "px";
+  const below = r.bottom - w.top + 8;
+  d.style.top = (below + H <= w.height - 8 ? below : Math.max(8, r.top - w.top - H - 8)) + "px";
+}
+
 function renderDetail() {
   const d = $("#detail"), n = selected && find(selected);
   if (!n) { d.hidden = true; return; }
   d.hidden = false;
-  const inp = (f, t = "text") => `<input data-f="${f}" type="${t}" value="${esc(n[f] ?? "")}">`;
+  const inp = (f, t = "text", extra = "") => `<input data-f="${f}" type="${t}" value="${esc(n[f] ?? "")}" ${extra}>`;
   const sel = (f, opts) => `<select data-f="${f}">${opts.map(([v, l]) => `<option value="${v}"${n[f] === v ? " selected" : ""}>${l}</option>`).join("")}</select>`;
-  d.innerHTML = `<h3>${n.key} <small>${TYPE_LABEL[n.type]}</small></h3>
-    <label>제목</label>${inp("title")}
-    <label>설명</label><textarea data-f="description" rows="5">${esc(n.description)}</textarea>
-    <label>상태</label>${sel("status", Object.entries(STATUS))}
-    <label>우선순위</label>${sel("priority", PRIORITY.map(p => [p, p]))}
-    <label>담당자</label>${inp("assignee")}
-    <label>보고자</label>${inp("reporter")}
-    <label>라벨 (쉼표 구분)</label>${inp("labels")}
-    <label>시작일</label>${inp("start_date", "date")}
-    <label>마감일</label>${inp("due_date", "date")}
-    <label>예상 시간(h)</label>${inp("estimate_h", "number")}
-    <label>진행률(%)</label>${inp("progress", "number")}
+  d.innerHTML = `<div class="top"><span class="key">${n.key}</span><span class="muted">${TYPE_LABEL[n.type]}</span><button class="x" id="d-close" title="닫기">✕</button></div>
+    <input class="title" data-f="title" value="${esc(n.title)}">
+    <div class="grid">
+      <label>상태</label>${sel("status", Object.entries(STATUS))}
+      <label>담당자</label>${inp("assignee")}
+      <label>마감일</label>${inp("due_date", "date")}
+      <label>진행률 <span id="pv">${n.progress}%</span></label><input data-f="progress" type="range" min="0" max="100" step="5" value="${n.progress}">
+    </div>
+    <textarea data-f="description" placeholder="설명  ([[P1-2]]로 다른 항목 연결)">${esc(n.description)}</textarea>
+    <details><summary>더 보기</summary><div class="grid">
+      <label>시작일</label>${inp("start_date", "date")}
+      <label>우선순위</label>${sel("priority", PRIORITY.map(p => [p, p]))}
+      <label>보고자</label>${inp("reporter")}
+      <label>라벨</label>${inp("labels", "text", 'placeholder="쉼표로 구분"')}
+      <label>예상 시간(h)</label>${inp("estimate_h", "number")}
+    </div><div class="muted" style="font-size:11px">생성 ${n.created_at} · 수정 ${n.updated_at}</div></details>
     <div class="links" id="d-links"></div>
-    <p style="color:var(--muted)">생성 ${n.created_at} · 수정 ${n.updated_at}</p>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      ${CHILD[n.type] ? `<button id="d-add">+ ${TYPE_LABEL[CHILD[n.type]]}</button>` : ""}
-      <button id="d-del">삭제</button><button id="d-close">닫기</button></div>`;
-  d.querySelectorAll("[data-f]").forEach(el => el.onchange = async () => {
-    await call("update", n.key, {[el.dataset.f]: el.value}); await reload();
+    <div class="actions">${CHILD[n.type] ? `<button id="d-add">＋ ${TYPE_LABEL[CHILD[n.type]]}</button>` : ""}<button id="d-del" class="danger">삭제</button></div>`;
+  d.querySelectorAll("[data-f]").forEach(el => {
+    if (el.type === "range") el.oninput = () => $("#pv").textContent = el.value + "%";
+    el.onchange = async () => { await call("update", n.key, {[el.dataset.f]: el.value}); await reload(); };
   });
   $("#d-close").onclick = () => { selected = null; render(); };
   call("get_item", n.key).then(g => {
-    const el = $("#d-links"); if (!el || selected !== n.key) return;
-    const a = ks => ks.map(k => `<a data-go="${k}">${k}</a>`).join("") || "-";
-    el.innerHTML = `<label>연결 (→ 이 항목이 참조)</label>${a(g.links)}<label>백링크 (← 참조하는 항목)</label>${a(g.backlinks)}`;
+    const el = $("#d-links"); if (!el || selected !== n.key || !(g.links.length || g.backlinks.length)) return;
+    const a = ks => ks.map(k => `<a data-go="${k}">${k}</a>`).join("");
+    el.innerHTML = (g.links.length ? `연결 ${a(g.links)} ` : "") + (g.backlinks.length ? `· 참조됨 ${a(g.backlinks)}` : "");
     el.querySelectorAll("[data-go]").forEach(x => x.onclick = () => select(x.dataset.go));
   }).catch(() => {});
   $("#d-del").onclick = async () => {
     if (!confirm(`${n.key} 및 하위 항목을 삭제할까요?`)) return;
     await call("delete", n.key); selected = null; await reload();
   };
+  placeDetail(d);
   const add = $("#d-add");
   if (add) add.onclick = async () => {
     const t = prompt(`${TYPE_LABEL[CHILD[n.type]]} 제목`); if (!t) return;
@@ -164,14 +193,14 @@ function addMsg(cls, html) {
 }
 async function sendLLM() {
   const inp = $("#llm-input"), text = inp.value.trim(); if (!text) return;
-  inp.value = ""; $("#llm-send").disabled = true;
+  inp.value = ""; $("#llm-send").disabled = true; inp.style.height = "";
   addMsg("user", esc(text));
-  const pend = addMsg("pending", "생각 중...");
+  const pend = addMsg("pending", "생각하는 중…");
   try {
     const r = await call("chat", text, history.slice());
     history.push({role: "user", content: text}, {role: "assistant", content: r.answer});
     let h = linkKeys(r.answer || "(응답 없음)");
-    if (r.results.length) h += `<div class="ops">${r.results.map(x => "✔ " + linkKeys(x)).join("<br>")}</div>`;
+    if (r.results.length) h += `<div class="ops">${r.results.map(x => "✓ " + linkKeys(x)).join("<br>")}</div>`;
     if (r.steps.length) h += `<details><summary>조회 ${r.steps.length}회</summary>${r.steps.map(s => esc(s.tool + " " + JSON.stringify(s.args))).join("<br>")}</details>`;
     pend.remove(); addMsg("bot", h);
     if (r.results.length) await reload();
@@ -189,7 +218,7 @@ const readSettings = () => ({llm_protocol: $("#s-proto").value, llm_base_url: $(
   llm_model: $("#s-model").value.trim(), llm_api_key: $("#s-key").value, llm_timeout: $("#s-timeout").value});
 
 async function init() {
-  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
   $("#btn-new-project").onclick = async () => {
     const t = prompt("과제 이름"); if (!t) return;
     const r = await call("create", "project", t); selected = r.key; await reload();
@@ -201,6 +230,7 @@ async function init() {
     try { $("#s-result").textContent = "OK: " + await call("test_llm"); } catch (e) { $("#s-result").textContent = "실패"; }
   };
   $("#llm-send").onclick = sendLLM;
+  $("#llm-input").oninput = e => { const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; };
   $("#llm-input").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendLLM(); } };
   $("#chat-clear").onclick = () => { history.length = 0; $("#msgs").innerHTML = ""; };
   $("#splitter").onmousedown = e => {

@@ -7,29 +7,29 @@
 </head>
 <body>
 <header>
-  <div class="tabs">
+  <span class="brand">Scheduler</span>
+  <nav class="seg" id="tabs">
     <button data-tab="gantt" class="active">간트</button>
     <button data-tab="list">리스트</button>
     <button data-tab="text">텍스트</button>
-  </div>
+  </nav>
   <div class="spacer"></div>
-  <button id="btn-new-project">+ 과제</button>
-  <button id="btn-settings">LLM 설정</button>
-  <span id="version" class="version"></span>
+  <button id="btn-new-project" class="primary">＋ 과제</button>
+  <button id="btn-settings" class="icon" title="LLM 서버 설정">설정</button>
 </header>
 
 <main>
   <section id="view-wrap"><div id="view"></div><div id="detail" hidden></div></section>
-  <div id="splitter" title="드래그하여 폭 조절"></div>
+  <div id="splitter"></div>
   <aside id="chat">
-    <div class="chat-head"><b>어시스턴트</b><span class="spacer"></span>
-      <button id="llm-undo" title="마지막 AI 변경 되돌리기">↶ 되돌리기</button>
-      <button id="chat-clear" title="대화 지우기">지우기</button></div>
+    <div class="chat-head"><b>어시스턴트</b><small id="version" class="version"></small><span class="spacer"></span>
+      <button id="llm-undo" class="ghost" title="마지막 AI 변경 되돌리기">되돌리기</button>
+      <button id="chat-clear" class="ghost" title="대화 지우기">지우기</button></div>
     <div id="msgs"></div>
-    <div class="chat-in">
-      <textarea id="llm-input" rows="3" placeholder="일정 입력·수정·질문 (Enter 전송, Shift+Enter 줄바꿈)&#10;예: 다음주 금요일까지 A과제에 로그인 API, 서브로 DB 스키마&#10;예: 이번 주 마감인 거 뭐 있어?"></textarea>
-      <button id="llm-send">전송</button>
-    </div>
+    <div class="chat-in"><div class="box">
+      <textarea id="llm-input" rows="2" placeholder="일정을 입력하거나 질문하세요"></textarea>
+      <button id="llm-send" class="send" title="전송" aria-label="전송">↑</button>
+    </div></div>
   </aside>
 </main>
 <div id="status"></div>
