@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>My Scheduler</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="tabs">
+    <button data-tab="gantt" class="active">간트</button>
+    <button data-tab="list">리스트</button>
+    <button data-tab="text">텍스트</button>
+  </div>
+  <div class="spacer"></div>
+  <button id="btn-new-project">+ 과제</button>
+  <button id="btn-settings">LLM 설정</button>
+  <span id="version" class="version"></span>
+</header>
+
+<main>
+  <section id="view"></section>
+  <aside id="detail" hidden></aside>
+</main>
+
+<footer>
+  <input id="llm-input" placeholder="예: 다음주 금요일까지 A과제에 로그인 API 구현, 서브로 DB 스키마" autocomplete="off">
+  <button id="llm-send">입력</button>
+  <button id="llm-undo" title="마지막 LLM 입력 되돌리기">되돌리기</button>
+  <span id="status"></span>
+</footer>
+
+<dialog id="settings-dlg">
+  <form method="dialog">
+    <h3>로컬 LLM 설정</h3>
+    <label>프로토콜
+      <select id="s-proto"><option value="openai">OpenAI 호환 (/chat/completions)</option></select>
+    </label>
+    <label>서버 주소 <input id="s-url" placeholder="http://localhost:1234/v1"></label>
+    <label>모델 (선택) <input id="s-model"></label>
+    <label>API 키 (선택) <input id="s-key" type="password"></label>
+    <label>타임아웃(초) <input id="s-timeout" type="number" min="5"></label>
+    <div class="row">
+      <button type="button" id="s-test">연결 테스트</button>
+      <span id="s-result"></span>
+      <span class="spacer"></span>
+      <button type="button" id="s-save">저장</button>
+      <button value="cancel">닫기</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
