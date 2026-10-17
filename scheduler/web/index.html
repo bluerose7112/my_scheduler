@@ -19,16 +19,20 @@
 </header>
 
 <main>
-  <section id="view"></section>
-  <aside id="detail" hidden></aside>
+  <section id="view-wrap"><div id="view"></div><div id="detail" hidden></div></section>
+  <div id="splitter" title="드래그하여 폭 조절"></div>
+  <aside id="chat">
+    <div class="chat-head"><b>어시스턴트</b><span class="spacer"></span>
+      <button id="llm-undo" title="마지막 AI 변경 되돌리기">↶ 되돌리기</button>
+      <button id="chat-clear" title="대화 지우기">지우기</button></div>
+    <div id="msgs"></div>
+    <div class="chat-in">
+      <textarea id="llm-input" rows="3" placeholder="일정 입력·수정·질문 (Enter 전송, Shift+Enter 줄바꿈)&#10;예: 다음주 금요일까지 A과제에 로그인 API, 서브로 DB 스키마&#10;예: 이번 주 마감인 거 뭐 있어?"></textarea>
+      <button id="llm-send">전송</button>
+    </div>
+  </aside>
 </main>
-
-<footer>
-  <input id="llm-input" placeholder="예: 다음주 금요일까지 A과제에 로그인 API 구현, 서브로 DB 스키마" autocomplete="off">
-  <button id="llm-send">입력</button>
-  <button id="llm-undo" title="마지막 LLM 입력 되돌리기">되돌리기</button>
-  <span id="status"></span>
-</footer>
+<div id="status"></div>
 
 <dialog id="settings-dlg">
   <form method="dialog">

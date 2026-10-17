@@ -4,21 +4,17 @@
 * { box-sizing:border-box; }
 html,body { height:100%; margin:0; }
 body { background:var(--bg); color:var(--fg); font:13px/1.45 "Segoe UI","Malgun Gothic",sans-serif; display:flex; flex-direction:column; }
-header,footer { display:flex; gap:8px; align-items:center; padding:8px 12px; background:var(--panel); border-color:var(--line); }
-header { border-bottom:1px solid; } footer { border-top:1px solid; }
+header { display:flex; gap:8px; align-items:center; padding:8px 12px; background:var(--panel); border-color:var(--line); }
+header { border-bottom:1px solid; }
 .spacer { flex:1; } .version { color:var(--muted); font-size:12px; }
 button { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:4px 10px; cursor:pointer; }
 button:hover { border-color:var(--accent); }
 .tabs button { border-radius:0; } .tabs button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
 input,select,textarea { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:4px 6px; font:inherit; }
-footer input { flex:1; padding:7px 10px; }
 main { flex:1; display:flex; min-height:0; }
 #view { flex:1; overflow:auto; }
-#detail { width:340px; border-left:1px solid var(--line); padding:12px; overflow:auto; background:var(--panel); }
 #detail label { display:block; margin:6px 0 2px; color:var(--muted); font-size:12px; }
 #detail input,#detail select,#detail textarea { width:100%; }
-#status { color:var(--muted); max-width:35%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#status.err { color:var(--blocked); }
 table { border-collapse:collapse; width:100%; }
 th,td { padding:4px 8px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
 th { position:sticky; top:0; background:var(--panel); z-index:2; }
@@ -40,3 +36,27 @@ pre.text { margin:0; padding:12px 16px; font:13px/1.6 Consolas,"D2Coding",monosp
 dialog { border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); width:460px; }
 dialog label { display:block; margin:8px 0 2px; } dialog input,dialog select { width:100%; }
 dialog .row { display:flex; gap:8px; align-items:center; margin-top:14px; }
+
+#view-wrap { flex:1; position:relative; min-width:0; display:flex; }
+#view { flex:1; overflow:auto; }
+#detail { position:absolute; top:10px; right:14px; width:330px; max-height:calc(100% - 20px); overflow:auto; padding:12px;
+  background:var(--bg); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.25); z-index:10; }
+#detail label { display:block; margin:6px 0 2px; color:var(--muted); font-size:12px; }
+#detail input,#detail select,#detail textarea { width:100%; }
+#detail .links a, .msg a.k { color:var(--accent); cursor:pointer; margin-right:6px; text-decoration:none; }
+#splitter { width:5px; cursor:col-resize; background:var(--line); }
+#splitter:hover { background:var(--accent); }
+#chat { width:400px; min-width:260px; display:flex; flex-direction:column; background:var(--panel); }
+.chat-head { display:flex; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); }
+#msgs { flex:1; overflow:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+.msg { max-width:94%; padding:7px 10px; border-radius:8px; white-space:pre-wrap; word-break:break-word; border:1px solid var(--line); background:var(--bg); }
+.msg.user { align-self:flex-end; background:var(--accent); color:#fff; border-color:var(--accent); }
+.msg.err { color:var(--blocked); } .msg.pending { color:var(--muted); font-style:italic; }
+.msg .ops { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); font-size:12px; color:var(--done); }
+.msg details { margin-top:6px; font-size:11px; color:var(--muted); }
+.chat-in { display:flex; flex-direction:column; gap:6px; padding:8px; border-top:1px solid var(--line); }
+.chat-in textarea { resize:vertical; min-height:56px; }
+.chat-in button { align-self:flex-end; background:var(--accent); color:#fff; border-color:var(--accent); }
+#status { position:fixed; left:12px; bottom:8px; color:var(--muted); background:var(--bg); padding:2px 8px; border-radius:4px; max-width:50%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#status:empty { display:none; } #status.err { color:var(--blocked); }
+.g-bar.sel, .g-name.sel, tr.row.sel { outline:2px solid var(--accent); }

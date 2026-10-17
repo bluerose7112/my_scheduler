@@ -45,7 +45,10 @@ function render() {
   if (tab === "gantt") v.innerHTML = renderGantt();
   else if (tab === "list") v.innerHTML = renderList();
   else v.innerHTML = renderText();
-  v.querySelectorAll("[data-key]").forEach(el => el.onclick = () => select(el.dataset.key));
+  v.querySelectorAll("[data-key]").forEach(el => {
+    el.onclick = () => select(el.dataset.key);
+    el.classList.toggle("sel", el.dataset.key === selected);
+  });
   renderDetail();
 }
 
@@ -102,7 +105,7 @@ function renderText() {
 function find(key, nodes = tree) {
   for (const n of nodes) { if (n.key === key) return n; const f = find(key, n.children); if (f) return f; }
 }
-function select(key) { selected = key; renderDetail(); }
+function select(key) { selected = key; render(); }
 
 function renderDetail() {
   const d = $("#detail"), n = selected && find(selected);
@@ -122,6 +125,7 @@ function renderDetail() {
     <label>마감일</label>${inp("due_date", "date")}
     <label>예상 시간(h)</label>${inp("estimate_h", "number")}
     <label>진행률(%)</label>${inp("progress", "number")}
+    <div class="links" id="d-links"></div>
     <p style="color:var(--muted)">생성 ${n.created_at} · 수정 ${n.updated_at}</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       ${CHILD[n.type] ? `<button id="d-add">+ ${TYPE_LABEL[CHILD[n.type]]}</button>` : ""}
@@ -129,7 +133,13 @@ function renderDetail() {
   d.querySelectorAll("[data-f]").forEach(el => el.onchange = async () => {
     await call("update", n.key, {[el.dataset.f]: el.value}); await reload();
   });
-  $("#d-close").onclick = () => { selected = null; renderDetail(); };
+  $("#d-close").onclick = () => { selected = null; render(); };
+  call("get_item", n.key).then(g => {
+    const el = $("#d-links"); if (!el || selected !== n.key) return;
+    const a = ks => ks.map(k => `<a data-go="${k}">${k}</a>`).join("") || "-";
+    el.innerHTML = `<label>연결 (→ 이 항목이 참조)</label>${a(g.links)}<label>백링크 (← 참조하는 항목)</label>${a(g.backlinks)}`;
+    el.querySelectorAll("[data-go]").forEach(x => x.onclick = () => select(x.dataset.go));
+  }).catch(() => {});
   $("#d-del").onclick = async () => {
     if (!confirm(`${n.key} 및 하위 항목을 삭제할까요?`)) return;
     await call("delete", n.key); selected = null; await reload();
@@ -143,15 +153,30 @@ function renderDetail() {
 
 async function reload() { tree = await call("tree"); render(); }
 
+const history = [];
+function linkKeys(text) {
+  return esc(text).replace(/\[?\b([A-Za-z0-9]+-\d+|P\d+)\b\]?/g, (m, k) => find(k) ? `<a class="k" data-go="${k}">${m}</a>` : m);
+}
+function addMsg(cls, html) {
+  const m = document.createElement("div"); m.className = "msg " + cls; m.innerHTML = html;
+  m.querySelectorAll("[data-go]").forEach(x => x.onclick = () => select(x.dataset.go));
+  const box = $("#msgs"); box.appendChild(m); box.scrollTop = box.scrollHeight; return m;
+}
 async function sendLLM() {
   const inp = $("#llm-input"), text = inp.value.trim(); if (!text) return;
-  $("#llm-send").disabled = true; setStatus("LLM 처리 중...");
+  inp.value = ""; $("#llm-send").disabled = true;
+  addMsg("user", esc(text));
+  const pend = addMsg("pending", "생각 중...");
   try {
-    const r = await call("llm_input", text);
-    inp.value = ""; setStatus((r.message || "완료") + " — " + r.results.join("; "));
-    await reload();
-  } catch (e) { /* status already shown */ }
-  $("#llm-send").disabled = false;
+    const r = await call("chat", text, history.slice());
+    history.push({role: "user", content: text}, {role: "assistant", content: r.answer});
+    let h = linkKeys(r.answer || "(응답 없음)");
+    if (r.results.length) h += `<div class="ops">${r.results.map(x => "✔ " + linkKeys(x)).join("<br>")}</div>`;
+    if (r.steps.length) h += `<details><summary>조회 ${r.steps.length}회</summary>${r.steps.map(s => esc(s.tool + " " + JSON.stringify(s.args))).join("<br>")}</details>`;
+    pend.remove(); addMsg("bot", h);
+    if (r.results.length) await reload();
+  } catch (e) { pend.remove(); addMsg("bot err", esc(e.message)); }
+  $("#llm-send").disabled = false; inp.focus();
 }
 
 async function openSettings() {
@@ -176,9 +201,17 @@ async function init() {
     try { $("#s-result").textContent = "OK: " + await call("test_llm"); } catch (e) { $("#s-result").textContent = "실패"; }
   };
   $("#llm-send").onclick = sendLLM;
-  $("#llm-input").onkeydown = e => { if (e.key === "Enter" && !e.isComposing) sendLLM(); };
+  $("#llm-input").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendLLM(); } };
+  $("#chat-clear").onclick = () => { history.length = 0; $("#msgs").innerHTML = ""; };
+  $("#splitter").onmousedown = e => {
+    e.preventDefault();
+    const mv = ev => { $("#chat").style.width = Math.max(260, Math.min(800, window.innerWidth - ev.clientX)) + "px"; };
+    const up = () => { removeEventListener("mousemove", mv); removeEventListener("mouseup", up); };
+    addEventListener("mousemove", mv); addEventListener("mouseup", up);
+  };
   $("#llm-undo").onclick = async () => {
-    const l = await call("undo"); setStatus(l == null ? "되돌릴 내용 없음" : `되돌림: ${l}`); await reload();
+    const l = await call("undo");
+    addMsg("bot", l == null ? "되돌릴 내용이 없습니다." : `↶ 되돌렸습니다: ${esc(l)}`); await reload();
   };
   $("#version").textContent = await call("version");
   document.title = "My Scheduler " + $("#version").textContent;

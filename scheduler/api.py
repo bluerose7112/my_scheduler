@@ -52,11 +52,17 @@ class Api:
         return llm.test_connection(self._s.get_settings())
 
     @_wrap
-    def llm_input(self, text):
-        raw = llm.chat(self._s.get_settings(), llm.build_messages(text, self._s.list_all()))
-        plan = llm.parse_reply(raw)
-        res = self._s.apply_ops(plan["operations"], label=text[:80])
-        return {"message": plan.get("message", ""), **res}
+    def get_item(self, key):
+        n = self._s.neighborhood(key)
+        if not n:
+            raise ValidationError(f"항목을 찾을 수 없습니다: {key}")
+        return {"links": n["links"], "backlinks": n["backlinks"]}
+
+    @_wrap
+    def chat(self, text, history=None):
+        r = llm.agent(self._s.get_settings(), self._s, text, history)
+        applied = self._s.apply_ops(r["operations"], label=text[:80]) if r["operations"] else {"results": []}
+        return {"answer": r["answer"], "results": applied["results"], "steps": r["steps"]}
 
     @_wrap
     def undo(self):

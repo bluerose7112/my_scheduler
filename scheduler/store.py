@@ -10,6 +10,7 @@ FIELDS = (
     "labels", "start_date", "due_date", "estimate_h", "progress",
 )
 CHILD_TYPE = {"project": "item", "item": "subitem"}
+LINK_RE = re.compile(r"\[\[([A-Za-z0-9]+(?:-\d+)?)\]\]")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -71,6 +72,44 @@ class Store:
             p = nodes.get(n["parent_id"])
             (p["children"] if p else roots).append(n)
         return roots
+
+    # ---- graph / retrieval (used by the LLM) --------------------------
+    def search(self, query: str = "", status=None, assignee=None, type_=None,
+               due_before=None, due_after=None, limit: int = 20) -> list[dict]:
+        where, args = [], []
+        for tok in (query or "").split():
+            where.append("(key LIKE ? OR title LIKE ? OR description LIKE ? OR labels LIKE ? OR assignee LIKE ?)")
+            args += [f"%{tok}%"] * 5
+        for col, val in (("status", status), ("assignee", assignee), ("type", type_)):
+            if val:
+                where.append(f"{col}=?"); args.append(val)
+        if due_before:
+            where.append("due_date IS NOT NULL AND due_date<=?"); args.append(due_before)
+        if due_after:
+            where.append("due_date IS NOT NULL AND due_date>=?"); args.append(due_after)
+        sql = "SELECT * FROM issues" + (" WHERE " + " AND ".join(where) if where else "")
+        rows = self.db.execute(sql + " ORDER BY due_date IS NULL, due_date, id LIMIT ?", [*args, int(limit)])
+        return [dict(r) for r in rows]
+
+    def links_out(self, issue: dict) -> list[str]:
+        """[[KEY]] references in title/description (Obsidian-style wiki links)."""
+        found = LINK_RE.findall(issue["title"] + "\n" + issue["description"])
+        return [k for k in dict.fromkeys(found) if k != issue["key"] and self.get(k)]
+
+    def backlinks(self, key: str) -> list[str]:
+        rows = self.db.execute("SELECT key FROM issues WHERE key<>? AND (description LIKE ? OR title LIKE ?)",
+                               (key, f"%[[{key}]]%", f"%[[{key}]]%")).fetchall()
+        return [r[0] for r in rows]
+
+    def neighborhood(self, key: str) -> dict | None:
+        row = self.get(key)
+        if not row:
+            return None
+        parent = self.get(row["parent_id"]) if row["parent_id"] else None
+        kids = self.db.execute("SELECT * FROM issues WHERE parent_id=? ORDER BY sort_order,id", (row["id"],)).fetchall()
+        return {"issue": row, "parent": parent["key"] if parent else None,
+                "children": [dict(k) for k in kids],
+                "links": self.links_out(row), "backlinks": self.backlinks(key)}
 
     # ---- keys --------------------------------------------------------
     def _root_key(self, issue: dict) -> str:

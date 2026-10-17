@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs tags/history for the embedded version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: python build.py
+      - name: Check embedded version matches tag
+        shell: bash
+        run: |
+          test -f dist/scheduler.exe
+          python -c "from scheduler.version import git_version; v=git_version(); print(v); assert v == '$GITHUB_REF_NAME', v"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/scheduler.exe
+          generate_release_notes: true
