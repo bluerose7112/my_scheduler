@@ -268,13 +268,15 @@ class Store:
     # ---- settings ----------------------------------------------------
     def get_settings(self) -> dict:
         d = {"llm_base_url": "http://localhost:1234/v1", "llm_protocol": "openai",
-             "llm_model": "", "llm_api_key": "", "llm_timeout": "120"}
+             "llm_model": "", "llm_api_key": "", "llm_timeout": "120",
+             # UI preferences (kept in the db: a webview's localStorage may not survive restarts)
+             "ui_sidebar": "1", "ui_kanban": "1", "ui_sum_collapsed": "0", "ui_project": ""}
         d.update({r[0]: r[1] for r in self.db.execute("SELECT key,value FROM settings")})
         return d
 
     def set_settings(self, values: dict):
         for k, v in values.items():
-            if k.startswith("llm_"):
+            if k.startswith(("llm_", "ui_")):
                 self.db.execute("INSERT INTO settings(key,value) VALUES(?,?) "
                                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, str(v)))
         self.db.commit()

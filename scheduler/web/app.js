@@ -7,6 +7,11 @@ const BAR_LABEL_MIN = 90;
 const DAY = 26, NAME_W = 280;
 
 let tree = [], tab = "gantt", selected = null;
+const prefs = {ui_sidebar: "1", ui_kanban: "1", ui_sum_collapsed: "0", ui_project: ""};
+function setPref(k, v) { prefs[k] = v; call("save_settings", {[k]: v}).catch(() => {}); }
+// tree narrowed to the project picked in the sidebar (all projects if none/unknown)
+function viewTree() { return prefs.ui_project && tree.some(p => p.key === prefs.ui_project) ? tree.filter(p => p.key === prefs.ui_project) : tree; }
+const activeProject = () => viewTree().length === 1 && prefs.ui_project ? prefs.ui_project : "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -43,25 +48,32 @@ const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const mmdd = s => s ? s.slice(5).replace("-", "/") : "";
 
 function render() {
-  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "board" && prefs.ui_kanban !== "1") tab = "gantt";
+  document.querySelectorAll("#tabs button").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === tab);
+    if (b.dataset.tab === "board") b.hidden = prefs.ui_kanban !== "1";
+  });
+  renderSidebar();
   const v = $("#view");
   if (tab === "gantt") v.innerHTML = renderSummary() + renderGantt();
+  else if (tab === "board") v.innerHTML = renderBoard();
   else if (tab === "list") v.innerHTML = renderList();
   else v.innerHTML = renderText();
   v.querySelectorAll("[data-key]").forEach(el => {
     el.onclick = () => select(el.dataset.key);
     el.classList.toggle("sel", el.dataset.key === selected);
   });
+  if (tab === "board") bindBoard(v);
   const tg = $("#sum-toggle");
-  if (tg) tg.onclick = () => { try { localStorage.setItem("sumCollapsed", sumCollapsed() ? "0" : "1"); } catch (e) {} render(); };
+  if (tg) tg.onclick = () => { setPref("ui_sum_collapsed", sumCollapsed() ? "0" : "1"); render(); };
   renderDetail();
 }
 
 // Today-first summary above the gantt: counts + what is late / due within a week.
 const SUM_MAX = 5;
-function sumCollapsed() { try { return localStorage.getItem("sumCollapsed") === "1"; } catch (e) { return false; } }
+function sumCollapsed() { return prefs.ui_sum_collapsed === "1"; }
 function renderSummary() {
-  const t = todayISO(), work = flatten(tree).filter(r => r.type !== "project");
+  const t = todayISO(), work = flatten(viewTree()).filter(r => r.type !== "project");
   if (!work.length) return "";
   const open = work.filter(r => r.status !== "done");
   const late = open.filter(r => r.due_date && r.due_date < t);
@@ -80,7 +92,7 @@ function renderSummary() {
 }
 
 function renderGantt() {
-  const rows = flatten(tree);
+  const rows = flatten(viewTree());
   if (!rows.length) return `<div class="empty">아직 일정이 없어요.<br>오른쪽 어시스턴트에게 말하거나 “＋ 과제”를 눌러 시작하세요.</div>`;
   const today = todayISO();
   const spans = rows.map(r => span(r));
@@ -121,7 +133,7 @@ function renderGantt() {
 }
 
 function renderList() {
-  const rows = flatten(tree);
+  const rows = flatten(viewTree());
   if (!rows.length) return `<div class="empty">아직 일정이 없어요.</div>`;
   const t = todayISO();
   let h = `<table><tr><th>제목</th><th>상태</th><th>담당</th><th>마감</th><th>진행</th></tr>`;
@@ -140,8 +152,53 @@ function renderText() {
     if (n.description) lines.push(`${"  ".repeat(d + 1)}  ${n.description.replace(/\n/g, "\n" + "  ".repeat(d + 1) + "  ")}`);
     walk(n.children, d + 1);
   });
-  walk(tree, 0);
+  walk(viewTree(), 0);
   return `<pre class="text">${esc(lines.join("\n")) || "(비어 있음)"}</pre>`;
+}
+
+function renderSidebar() {
+  const side = $("#side"), on = prefs.ui_sidebar === "1";
+  side.hidden = !on; $("#btn-side").classList.toggle("on", on);
+  if (!on) return;
+  const act = activeProject(), itemsOf = p => flatten([p]).filter(r => r.type === "item");
+  const row = (key, name, items, pct) => `<div class="pi${act === key ? " on" : ""}" data-p="${key}"><div class="pm"><div class="nm">${esc(name)}</div>${pct == null ? "" : `<div class="pb"><i style="width:${pct}%"></i></div>`}</div><span class="ct">${items}</span>${key ? `<button class="pmore" data-open="${key}" title="과제 정보">⋯</button>` : ""}</div>`;
+  const all = tree.reduce((n, p) => n + itemsOf(p).length, 0);
+  side.innerHTML = `<h5>과제</h5>${row("", "전체", all, null)}${tree.map(p => { const it = itemsOf(p); return row(p.key, p.title, it.length, it.length ? Math.round(it.filter(r => r.status === "done").length * 100 / it.length) : 0); }).join("")}<button class="side-add" id="side-add">＋ 새 과제</button>`;
+  side.querySelectorAll(".pi").forEach(el => el.onclick = () => { setPref("ui_project", el.dataset.p); render(); });
+  side.querySelectorAll(".pmore").forEach(el => el.onclick = e => { e.stopPropagation(); select(el.dataset.open); });
+  $("#side-add").onclick = newProject;
+}
+
+// Kanban: one column per status, cards are items (subitems roll up as "서브 n/m"); drag a card to change its status.
+function renderBoard() {
+  const t = todayISO(), proj = activeProject(), items = flatten(viewTree()).filter(r => r.type === "item");
+  if (!items.length) return `<div class="empty">아직 아이템이 없어요.</div>`;
+  const name = {}; tree.forEach(p => name[p.key] = p.title);
+  const card = r => {
+    const late = r.due_date && r.due_date < t && r.status !== "done", done = r.children.filter(c => c.status === "done").length;
+    return `<div class="kc" draggable="true" data-key="${r.key}">${proj ? "" : `<div class="tg">${esc(name[r.key.split("-")[0]] || "")}</div>`}<div class="tt">${esc(r.title)}</div><div class="ft"><span class="${late ? "late" : ""}">${mmdd(r.due_date)}</span>${r.children.length ? `<span>서브 ${done}/${r.children.length}</span>` : ""}${r.assignee ? `<span class="av" title="${esc(r.assignee)}">${esc(r.assignee.slice(0, 2))}</span>` : ""}</div>${r.progress && r.status !== "done" ? `<div class="bar" style="--c:var(--${r.status})"><i style="width:${r.progress}%"></i></div>` : ""}</div>`;
+  };
+  return `<div class="board">${Object.entries(STATUS).map(([st, label]) => {
+    const cs = items.filter(r => r.status === st);
+    return `<div class="col" data-status="${st}"><h4 style="--c:var(--${st})"><i></i>${label}<span>${cs.length}</span></h4>${cs.map(card).join("")}</div>`;
+  }).join("")}</div>`;
+}
+function bindBoard(v) {
+  // narrow window: scroll sideways while a card is dragged near the left/right edge
+  v.ondragover = e => { const r = v.getBoundingClientRect(); if (e.clientX > r.right - 50) v.scrollLeft += 18; else if (e.clientX < r.left + 50) v.scrollLeft -= 18; };
+  v.querySelectorAll(".kc").forEach(el => el.ondragstart = e => { e.dataTransfer.setData("text/plain", el.dataset.key); el.classList.add("drag"); });
+  v.querySelectorAll(".kc").forEach(el => el.ondragend = () => el.classList.remove("drag"));
+  v.querySelectorAll(".col").forEach(col => {
+    col.ondragover = e => { e.preventDefault(); col.classList.add("over"); };
+    col.ondragleave = () => col.classList.remove("over");
+    col.ondrop = async e => {
+      e.preventDefault(); col.classList.remove("over");
+      const n = find(e.dataTransfer.getData("text/plain")), st = col.dataset.status;
+      if (!n || n.status === st) return;
+      const f = {status: st}; if (st === "done") f.progress = 100;   // a finished card shouldn't keep a partial progress bar
+      await call("update", n.key, f); await reload();
+    };
+  });
 }
 
 function find(key, nodes = tree) {
@@ -273,18 +330,26 @@ async function openSettings() {
   const s = await call("get_settings");
   $("#s-proto").value = s.llm_protocol; $("#s-url").value = s.llm_base_url;
   $("#s-model").value = s.llm_model; $("#s-key").value = s.llm_api_key; $("#s-timeout").value = s.llm_timeout;
+  $("#s-kanban").checked = prefs.ui_kanban === "1";
   $("#s-result").textContent = ""; $("#settings-dlg").showModal();
 }
 const readSettings = () => ({llm_protocol: $("#s-proto").value, llm_base_url: $("#s-url").value.trim(),
   llm_model: $("#s-model").value.trim(), llm_api_key: $("#s-key").value, llm_timeout: $("#s-timeout").value});
 
+async function newProject() {
+  const t = prompt("과제 이름"); if (!t) return;
+  const r = await call("create", "project", t); selected = r.key; await reload();
+}
+function toggleSidebar() { setPref("ui_sidebar", prefs.ui_sidebar === "1" ? "0" : "1"); render(); }
+
 async function init() {
+  try { Object.assign(prefs, Object.fromEntries(Object.entries(await call("get_settings")).filter(([k]) => k.startsWith("ui_")))); } catch (e) {}
+  $("#btn-side").onclick = toggleSidebar;
+  addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSidebar(); } });
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-  $("#btn-new-project").onclick = async () => {
-    const t = prompt("과제 이름"); if (!t) return;
-    const r = await call("create", "project", t); selected = r.key; await reload();
-  };
+  $("#btn-new-project").onclick = newProject;
   $("#btn-settings").onclick = openSettings;
+  $("#s-kanban").onchange = e => { setPref("ui_kanban", e.target.checked ? "1" : "0"); render(); };
   $("#s-save").onclick = async () => { await call("save_settings", readSettings()); $("#settings-dlg").close(); setStatus("설정 저장됨"); };
   $("#s-test").onclick = async () => {
     await call("save_settings", readSettings()); $("#s-result").textContent = "확인 중...";

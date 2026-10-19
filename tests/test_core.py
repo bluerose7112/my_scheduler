@@ -162,3 +162,10 @@ def test_diagnose_non_ollama_server(store):
     srv.shutdown()
     assert d["ollama"] is False and d["models"] == ["m1"]
     assert d["test"]["json_ok"] is True and d["request_params"] == {"temperature": 0}
+
+
+def test_ui_settings_roundtrip(store):
+    assert store.get_settings()["ui_sidebar"] == "1"
+    store.set_settings({"ui_sidebar": "0", "ui_project": "P1", "evil": "x"})
+    s = store.get_settings()
+    assert s["ui_sidebar"] == "0" and s["ui_project"] == "P1" and "evil" not in s
