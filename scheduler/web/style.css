@@ -53,12 +53,15 @@ pre.text { margin:0; padding:20px 28px; font:13px/1.8 ui-monospace,"SF Mono",Con
 .g-head.g-name { cursor:default; color:var(--muted); font-size:12px; }
 .g-track { position:relative; height:44px; border-bottom:1px solid var(--line); background-image:var(--wk); background-size:var(--wkw) 100%; }
 .g-track.g-head { background:var(--bg); }
-.g-bar { position:absolute; top:9px; height:26px; border-radius:13px; background:var(--c); color:var(--on-bar); cursor:pointer; overflow:hidden; display:flex; align-items:center; padding:0 11px; font-size:12px; font-weight:500; transition:filter .15s; }
+.g-bar { --t:var(--accent); position:absolute; top:9px; height:26px; border-radius:13px; background:color-mix(in srgb, var(--t) 16%, var(--bg)); border:1px solid color-mix(in srgb, var(--t) 30%, var(--bg)); color:var(--fg); cursor:pointer; overflow:hidden; display:flex; align-items:center; padding:0 10px; font-size:12px; font-weight:500; transition:filter .15s; }
 .g-bar span { position:relative; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.g-bar:hover { filter:brightness(.95); } .g-bar.sel { box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
-.g-bar .prog { position:absolute; inset:0 auto 0 0; background:rgba(0,0,0,.15); }
-.g-bar.proj { height:10px; top:17px; border-radius:5px; padding:0; opacity:.5; }
-.g-bar.st-todo { color:#3c4043; }
+.g-bar:hover { filter:brightness(.97); } .g-bar.sel { box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.g-bar .prog { position:absolute; inset:0 auto 0 0; background:color-mix(in srgb, var(--t) 32%, var(--bg)); }
+.g-bar.st-done { --t:var(--muted); }
+.g-bar.proj { height:10px; top:17px; border:0; border-radius:5px; padding:0; background:var(--line2); opacity:.7; }
+.sdot { flex:none; margin-left:auto; padding-left:8px; width:15px; height:7px; position:relative; }
+.sdot::before { content:""; position:absolute; right:0; top:0; width:7px; height:7px; border-radius:50%; background:var(--c); }
+.g-title { min-width:0; }
 .g-today { position:absolute; top:0; bottom:0; width:1.5px; background:var(--accent); z-index:1; pointer-events:none; opacity:.8; }
 .g-today-h { position:absolute; bottom:-1px; width:9px; height:9px; margin-left:-3.5px; border-radius:50%; background:var(--accent); }
 .g-month { position:absolute; top:4px; font-size:12px; font-weight:500; color:var(--fg); padding-left:6px; }

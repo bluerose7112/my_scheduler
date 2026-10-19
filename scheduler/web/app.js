@@ -108,11 +108,11 @@ function renderGantt() {
   h += `<div class="g-name g-head">이름</div><div class="g-track g-head">${head}<div class="g-today" style="left:${todayX}px"><i class="g-today-h" style="bottom:-5px"></i></div></div>`;
   rows.forEach((r, i) => {
     const sp = spans[i];
-    h += `<div class="g-name type-${r.type}" data-key="${r.key}" style="padding-left:${14 + r.depth*18}px" title="${esc(r.title)}"><span class="key">${r.key}</span><span class="g-title">${esc(r.title)}</span></div>`;
+    h += `<div class="g-name type-${r.type}" data-key="${r.key}" style="padding-left:${14 + r.depth*18}px" title="${esc(r.title)}"><span class="key">${r.key}</span><span class="g-title">${esc(r.title)}</span>${r.type === "project" ? "" : `<i class="sdot" style="--c:var(--${r.status})" title="${STATUS[r.status]}"></i>`}</div>`;
     h += `<div class="g-track"><div class="g-today" style="left:${todayX}px"></div>`;
     if (sp) {
       const x = diffDays(start, sp[0]) * DAY + 1, w = Math.max(DAY - 2, (diffDays(sp[0], sp[1]) + 1) * DAY - 2);
-      h += `<div class="g-bar st-${r.status}${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px;--c:var(--${r.status})" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div>${r.type === "project" || w < BAR_LABEL_MIN ? "" : `<span>${esc(r.title)}</span>`}</div>`;
+      h += `<div class="g-bar st-${r.status}${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div>${r.type === "project" || w < BAR_LABEL_MIN ? "" : `<span>${esc(r.title)}</span>`}</div>`;
       if (r.type !== "project" && w < BAR_LABEL_MIN) h += `<div class="g-out" data-key="${r.key}" style="left:${x + w + 6}px">${esc(r.title)}</div>`;
     }
     h += `</div>`;
