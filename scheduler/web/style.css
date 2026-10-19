@@ -2,7 +2,7 @@
 :root {
   --bg:#fff; --surface:#f8f9fa; --fg:#202124; --muted:#80868b; --line:#eceff1; --line2:#dadce0;
   --on-accent:#fff; --on-bar:#fff; --accent:#1a73e8; --accent-soft:#e8f0fe; --shadow:0 1px 3px rgba(60,64,67,.15), 0 8px 24px rgba(60,64,67,.12);
-  --todo:#80868b; --in_progress:#1a73e8; --in_review:#9334e6; --blocked:#d93025; --done:#1e8e3e;
+  --todo:#9aa0a6; --in_progress:#1a73e8; --in_review:#9334e6; --blocked:#d93025; --done:#1e8e3e;
   --weekend:rgba(60,64,67,.035); --r:12px;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
 }
@@ -56,8 +56,9 @@ pre.text { margin:0; padding:20px 28px; font:13px/1.8 ui-monospace,"SF Mono",Con
 .g-bar { position:absolute; top:9px; height:26px; border-radius:13px; background:var(--c); color:var(--on-bar); cursor:pointer; overflow:hidden; display:flex; align-items:center; padding:0 11px; font-size:12px; font-weight:500; transition:filter .15s; }
 .g-bar span { position:relative; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .g-bar:hover { filter:brightness(.95); } .g-bar.sel { box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
-.g-bar .prog { position:absolute; inset:0 auto 0 0; background:rgba(0,0,0,.2); }
-.g-bar.proj { height:10px; top:17px; border-radius:5px; padding:0; opacity:.45; }
+.g-bar .prog { position:absolute; inset:0 auto 0 0; background:rgba(0,0,0,.15); }
+.g-bar.proj { height:10px; top:17px; border-radius:5px; padding:0; opacity:.5; }
+.g-bar.st-todo { color:#3c4043; }
 .g-today { position:absolute; top:0; bottom:0; width:1.5px; background:var(--accent); z-index:1; pointer-events:none; opacity:.8; }
 .g-today-h { position:absolute; bottom:-1px; width:9px; height:9px; margin-left:-3.5px; border-radius:50%; background:var(--accent); }
 .g-month { position:absolute; top:4px; font-size:12px; font-weight:500; color:var(--fg); padding-left:6px; }
