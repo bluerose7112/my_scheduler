@@ -112,7 +112,7 @@ function renderGantt() {
     h += `<div class="g-track"><div class="g-today" style="left:${todayX}px"></div>`;
     if (sp) {
       const x = diffDays(start, sp[0]) * DAY + 1, w = Math.max(DAY - 2, (diffDays(sp[0], sp[1]) + 1) * DAY - 2);
-      h += `<div class="g-bar st-${r.status}${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div>${r.type === "project" || w < BAR_LABEL_MIN ? "" : `<span>${esc(r.title)}</span>`}</div>`;
+      h += `<div class="g-bar st-${r.status}${r.type === "project" ? " proj" : ""}${r.type !== "project" && r.status !== "done" && (r.status === "blocked" || (r.due_date && r.due_date < today)) ? " alert" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div>${r.type === "project" || w < BAR_LABEL_MIN ? "" : `<span>${esc(r.title)}</span>`}</div>`;
       if (r.type !== "project" && w < BAR_LABEL_MIN) h += `<div class="g-out" data-key="${r.key}" style="left:${x + w + 6}px">${esc(r.title)}</div>`;
     }
     h += `</div>`;

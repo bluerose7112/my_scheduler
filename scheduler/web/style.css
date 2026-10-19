@@ -58,6 +58,7 @@ pre.text { margin:0; padding:20px 28px; font:13px/1.8 ui-monospace,"SF Mono",Con
 .g-bar:hover { filter:brightness(.97); } .g-bar.sel { box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 .g-bar .prog { position:absolute; inset:0 auto 0 0; background:color-mix(in srgb, var(--t) 32%, var(--bg)); }
 .g-bar.st-done { --t:var(--muted); }
+.g-bar.alert { border:2px solid var(--t); padding:0 9px; }  /* late or blocked: same tone, bolder outline */
 .g-bar.proj { height:10px; top:17px; border:0; border-radius:5px; padding:0; background:var(--line2); opacity:.7; }
 .sdot { flex:none; margin-left:auto; padding-left:8px; width:15px; height:7px; position:relative; }
 .sdot::before { content:""; position:absolute; right:0; top:0; width:7px; height:7px; border-radius:50%; background:var(--c); }
