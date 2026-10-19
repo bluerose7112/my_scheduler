@@ -140,3 +140,25 @@ def test_llm_http(store):
     assert seen["path"] == "/v1/chat/completions"
     assert [m["role"] for m in seen["body"]["messages"]] == ["system", "user", "assistant", "user"]
     assert [x["title"] for x in store.list_all()] == ["A과제"]
+
+
+def test_diagnose_non_ollama_server(store):
+    """Plain OpenAI-compatible server: no /api/*, falls back to /v1/models and still runs the test call."""
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            code, out = (200, {"data": [{"id": "m1"}]}) if self.path == "/v1/models" else (404, {})
+            self._send(code, out)
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self._send(200, {"choices": [{"message": {"content": '{"answer":"ok","operations":[]}'}}]})
+        def _send(self, code, obj):
+            b = json.dumps(obj).encode()
+            self.send_response(code); self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+        def log_message(self, *a): pass
+
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    d = llm.diagnose({"llm_base_url": f"http://127.0.0.1:{srv.server_port}/v1", "llm_model": "m1"})
+    srv.shutdown()
+    assert d["ollama"] is False and d["models"] == ["m1"]
+    assert d["test"]["json_ok"] is True and d["request_params"] == {"temperature": 0}

@@ -126,6 +126,8 @@ WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"]
 class LLMError(RuntimeError):
     pass
 
+REQUEST_PARAMS = {"temperature": 0}  # sent on every request; overrides the model's own defaults
+
 
 def chat(settings: dict, messages: list[dict]) -> str:
     proto = settings.get("llm_protocol", "openai")
@@ -133,7 +135,7 @@ def chat(settings: dict, messages: list[dict]) -> str:
         raise LLMError(f"지원하지 않는 프로토콜: {proto}")
     base = settings["llm_base_url"].rstrip("/")
     messages = [{k: v for k, v in m.items() if not k.startswith("_")} for m in messages]
-    body = {"messages": messages, "temperature": 0}
+    body = {"messages": messages, **REQUEST_PARAMS}
     if settings.get("llm_model"):
         body["model"] = settings["llm_model"]
     headers = {"Content-Type": "application/json"}
@@ -167,6 +169,69 @@ def parse_json(text: str) -> dict:
     if not isinstance(obj, dict):
         raise LLMError("JSON 객체가 아닙니다")
     return obj
+
+
+def _http(url: str, settings: dict, body: dict | None = None, timeout: float = 10):
+    headers = {"Content-Type": "application/json"}
+    if settings.get("llm_api_key"):
+        headers["Authorization"] = "Bearer " + settings["llm_api_key"]
+    data = json.dumps(body).encode() if body is not None else None
+    with urllib.request.urlopen(urllib.request.Request(url, data, headers), timeout=timeout) as r:
+        return json.load(r)
+
+
+def diagnose(settings: dict) -> dict:
+    """Report what the server actually has configured; Ollama-specific parts are best effort."""
+    base = settings["llm_base_url"].rstrip("/")
+    root = base[:-3] if base.endswith("/v1") else base
+    model = settings.get("llm_model") or ""
+    out: dict = {"base_url": base, "model": model, "request_params": REQUEST_PARAMS,
+                 "timeout": settings.get("llm_timeout")}
+
+    def attempt(key, fn):
+        try:
+            out[key] = fn()
+        except Exception as e:  # diagnostics must never raise; show the failure instead
+            out[key] = {"error": f"{type(e).__name__}: {e}"}
+
+    attempt("version", lambda: _http(root + "/api/version", settings)["version"])
+    out["ollama"] = "error" not in (out["version"] if isinstance(out["version"], dict) else {})
+    if out["ollama"]:
+        attempt("installed", lambda: [{"name": m["name"], "size_gb": round(m["size"] / 1e9, 1),
+                                       "params": m["details"].get("parameter_size"),
+                                       "quant": m["details"].get("quantization_level")}
+                                      for m in _http(root + "/api/tags", settings)["models"]])
+        attempt("loaded", lambda: [{"name": m["name"], "size_gb": round(m["size"] / 1e9, 1),
+                                    "vram_gb": round(m.get("size_vram", 0) / 1e9, 1),
+                                    "expires_at": m.get("expires_at")}
+                                   for m in _http(root + "/api/ps", settings)["models"]])
+        if model:
+            def show():
+                d = _http(root + "/api/show", settings, {"model": model})
+                params = {}
+                for line in (d.get("parameters") or "").splitlines():
+                    k, _, v = line.strip().partition(" ")
+                    if k:
+                        params[k] = v.strip()
+                ctx_max = {k: v for k, v in d.get("model_info", {}).items() if k.endswith("context_length")}
+                return {"model_defaults": params, "context_max": ctx_max, "parent": d["details"].get("parent_model"),
+                        "capabilities": d.get("capabilities"), "has_system_prompt": bool(d.get("system"))}
+            attempt("model_info", show)
+    else:
+        attempt("models", lambda: [m["id"] for m in _http(base + "/models", settings)["data"]])
+
+    import time
+    t0 = time.time()
+    try:
+        reply = chat(settings, [{"role": "user", "content": 'Reply with exactly this JSON and nothing else: {"answer": "ok", "operations": []}'}])
+        try:
+            parse_json(reply); json_ok = True
+        except LLMError:
+            json_ok = False
+        out["test"] = {"seconds": round(time.time() - t0, 1), "json_ok": json_ok, "reply": reply[:200]}
+    except LLMError as e:
+        out["test"] = {"error": str(e)}
+    return out
 
 
 def test_connection(settings: dict) -> str:

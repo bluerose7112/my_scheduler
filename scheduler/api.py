@@ -52,6 +52,10 @@ class Api:
         return llm.test_connection(self._s.get_settings())
 
     @_wrap
+    def diagnose_llm(self):
+        return llm.diagnose(self._s.get_settings())
+
+    @_wrap
     def get_item(self, key):
         n = self._s.neighborhood(key)
         if not n:

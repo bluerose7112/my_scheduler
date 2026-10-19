@@ -208,6 +208,33 @@ async function sendLLM() {
   $("#llm-send").disabled = false; inp.focus();
 }
 
+function fmtDiag(d) {
+  const err = v => v && v.error, L = [];
+  const row = (k, v) => L.push(k.padEnd(14) + v);
+  row("서버", d.base_url + (d.ollama ? `  (Ollama ${d.version})` : "  (Ollama API 없음 - 일반 OpenAI 호환 서버)"));
+  row("모델 설정값", d.model || "(비어 있음)");
+  row("앱이 보내는 값", JSON.stringify(d.request_params) + "  <- 요청마다 모델 기본값을 덮어씀");
+  if (d.model_info) {
+    if (err(d.model_info)) row("모델 조회", "실패 " + d.model_info.error);
+    else {
+      const m = d.model_info;
+      row("모델 기본값", Object.entries(m.model_defaults).map(([k, v]) => k + "=" + v).join("  ") || "(없음)");
+      row("최대 컨텍스트", Object.values(m.context_max).join(", ") || "?");
+      row("기반 모델", m.parent || "-");
+      row("기능", (m.capabilities || []).join(", "));
+      row("시스템프롬프트", m.has_system_prompt ? "있음" : "없음");
+    }
+  }
+  const list = (k, v, f) => err(v) ? row(k, "실패 " + v.error) : row(k, v.length ? "" : "(없음)") || v.forEach(x => L.push("  - " + f(x)));
+  if (d.loaded) list("메모리 로드됨", d.loaded, x => `${x.name}  VRAM ${x.vram_gb}/${x.size_gb}GB`);
+  if (d.installed) list("설치됨", d.installed, x => `${x.name}  ${x.params} ${x.quant} ${x.size_gb}GB`);
+  if (d.models) list("서버 모델", d.models, x => x);
+  const t = d.test;
+  row("테스트 호출", err(t) ? "실패 " + t.error : `${t.seconds}초, JSON 형식 ${t.json_ok ? "OK" : "실패"}`);
+  if (t && t.reply) L.push("  응답: " + t.reply.replace(/\s+/g, " "));
+  return L.join("\n");
+}
+
 async function openSettings() {
   const s = await call("get_settings");
   $("#s-proto").value = s.llm_protocol; $("#s-url").value = s.llm_base_url;
@@ -228,6 +255,11 @@ async function init() {
   $("#s-test").onclick = async () => {
     await call("save_settings", readSettings()); $("#s-result").textContent = "확인 중...";
     try { $("#s-result").textContent = "OK: " + await call("test_llm"); } catch (e) { $("#s-result").textContent = "실패"; }
+  };
+  $("#s-diag").onclick = async () => {
+    const out = $("#s-diag-out"); out.hidden = false; out.textContent = "진단 중... (모델 호출 포함)";
+    await call("save_settings", readSettings());
+    try { out.textContent = fmtDiag(await call("diagnose_llm")); } catch (e) { out.textContent = "실패: " + e.message; }
   };
   $("#llm-send").onclick = sendLLM;
   $("#llm-input").oninput = e => { const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; };
