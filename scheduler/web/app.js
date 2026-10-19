@@ -3,6 +3,7 @@ const STATUS = {todo:"할 일", in_progress:"진행 중", in_review:"리뷰", bl
 const PRIORITY = ["highest","high","medium","low","lowest"];
 const TYPE_LABEL = {project:"과제", item:"아이템", subitem:"서브"};
 const CHILD = {project:"item", item:"subitem"};
+const BAR_LABEL_MIN = 90;
 const DAY = 26, NAME_W = 280;
 
 let tree = [], tab = "gantt", selected = null;
@@ -109,7 +110,8 @@ function renderGantt() {
     h += `<div class="g-track"><div class="g-today" style="left:${todayX}px"></div>`;
     if (sp) {
       const x = diffDays(start, sp[0]) * DAY + 1, w = Math.max(DAY - 2, (diffDays(sp[0], sp[1]) + 1) * DAY - 2);
-      h += `<div class="g-bar${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px;--c:var(--${r.status})" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div></div>`;
+      h += `<div class="g-bar${r.type === "project" ? " proj" : ""}" data-key="${r.key}" style="left:${x}px;width:${w}px;--c:var(--${r.status})" title="${esc(r.title)}  ${sp[0]} ~ ${sp[1]}"><div class="prog" style="width:${r.progress}%"></div>${r.type === "project" || w < BAR_LABEL_MIN ? "" : `<span>${esc(r.title)}</span>`}</div>`;
+      if (r.type !== "project" && w < BAR_LABEL_MIN) h += `<div class="g-out" data-key="${r.key}" style="left:${x + w + 6}px">${esc(r.title)}</div>`;
     }
     h += `</div>`;
   });
@@ -153,8 +155,14 @@ function placeDetail(d) {
   const w = wrap.getBoundingClientRect(), r = el.getBoundingClientRect(), W = d.offsetWidth, H = d.offsetHeight;
   const cx = Math.max(r.left, w.left) + (Math.min(r.right, w.right) - Math.max(r.left, w.left)) / 2;
   d.style.left = Math.max(10, Math.min(cx - w.left - W / 2, w.width - W - 10)) + "px";
-  const below = r.bottom - w.top + 8;
-  d.style.top = (below + H <= w.height - 8 ? below : Math.max(8, r.top - w.top - H - 8)) + "px";
+  const below = r.bottom - w.top + 8, above = r.top - w.top - H - 8;
+  if (below + H <= w.height - 8) d.style.top = below + "px";
+  else if (above >= 8) d.style.top = above + "px";
+  else {  // no room above/below: sit beside the bar instead of covering it
+    const right = r.right - w.left + 10, left = r.left - w.left - W - 10;
+    d.style.left = Math.max(10, right + W <= w.width - 10 ? right : left) + "px";
+    d.style.top = Math.max(8, Math.min(r.top - w.top, w.height - H - 8)) + "px";
+  }
 }
 
 function renderDetail() {
