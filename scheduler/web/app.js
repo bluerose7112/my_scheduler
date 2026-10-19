@@ -44,14 +44,38 @@ const mmdd = s => s ? s.slice(5).replace("-", "/") : "";
 function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   const v = $("#view");
-  if (tab === "gantt") v.innerHTML = renderGantt();
+  if (tab === "gantt") v.innerHTML = renderSummary() + renderGantt();
   else if (tab === "list") v.innerHTML = renderList();
   else v.innerHTML = renderText();
   v.querySelectorAll("[data-key]").forEach(el => {
     el.onclick = () => select(el.dataset.key);
     el.classList.toggle("sel", el.dataset.key === selected);
   });
+  const tg = $("#sum-toggle");
+  if (tg) tg.onclick = () => { try { localStorage.setItem("sumCollapsed", sumCollapsed() ? "0" : "1"); } catch (e) {} render(); };
   renderDetail();
+}
+
+// Today-first summary above the gantt: counts + what is late / due within a week.
+const SUM_MAX = 5;
+function sumCollapsed() { try { return localStorage.getItem("sumCollapsed") === "1"; } catch (e) { return false; } }
+function renderSummary() {
+  const t = todayISO(), work = flatten(tree).filter(r => r.type !== "project");
+  if (!work.length) return "";
+  const open = work.filter(r => r.status !== "done");
+  const late = open.filter(r => r.due_date && r.due_date < t);
+  const soon = open.filter(r => r.due_date && r.due_date >= t && diffDays(t, r.due_date) <= 7);
+  const byDue = (a, b) => a.due_date.localeCompare(b.due_date);
+  const row = r => `<div class="ag${r.due_date < t ? " late" : ""}" data-key="${r.key}"><span class="d">${mmdd(r.due_date)}</span><span class="ti">${esc(r.title)}</span>${badge(r.status)}<span class="who muted">${esc(r.assignee)}</span></div>`;
+  const group = (title, rs) => {
+    if (!rs.length) return "";
+    const sorted = rs.slice().sort(byDue);
+    return `<h4>${title}</h4>${sorted.slice(0, SUM_MAX).map(row).join("")}${sorted.length > SUM_MAX ? `<div class="more muted">외 ${sorted.length - SUM_MAX}개</div>` : ""}`;
+  };
+  const card = (n, label, cls = "") => `<div class="card ${cls}"><b>${n}</b><span>${label}</span></div>`;
+  const body = sumCollapsed() ? "" : `<div class="strip">${card(late.length, "지연", late.length ? "warn" : "")}${card(soon.length, "이번 주 마감")}${card(work.filter(r => r.status === "in_progress").length, "진행 중")}${card(`${work.length - open.length}/${work.length}`, "완료")}</div>
+    <div class="agenda">${group("지연", late) + group("이번 주", soon) || `<div class="muted ag-empty">지연되었거나 이번 주 마감인 일정이 없어요.</div>`}</div>`;
+  return `<div class="sumwrap"><div class="sum-head"><b>오늘</b><span class="muted">${t.slice(5).replace("-", "월 ")}일</span><button class="ghost" id="sum-toggle">${sumCollapsed() ? "펼치기" : "접기"}</button></div>${body}</div>`;
 }
 
 function renderGantt() {
