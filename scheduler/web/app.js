@@ -98,7 +98,9 @@ function renderGantt() {
   let head = "";
   for (let i = 0; i < days; i++) {
     const d = new Date(parse(start).getTime() + i * 864e5);
-    if (d.getUTCDate() === 1 || i === 0) head += `<div class="g-month" style="left:${i*DAY}px">${d.getUTCFullYear()}년 ${d.getUTCMonth()+1}월</div>`;
+    // the first label is skipped when the next month starts within 4 days, or the two labels overlap
+    const nearNext = i === 0 && [1, 2, 3, 4].some(k => new Date(d.getTime() + k * 864e5).getUTCDate() === 1);
+    if (d.getUTCDate() === 1 || (i === 0 && !nearNext)) head += `<div class="g-month" style="left:${i*DAY}px">${d.getUTCFullYear()}년 ${d.getUTCMonth()+1}월</div>`;
     if (d.getUTCDay() === 1) head += `<div class="g-wk" style="left:${i*DAY}px">${d.getUTCDate()}</div>`;
   }
   const todayX = diffDays(start, today) * DAY + DAY / 2;
