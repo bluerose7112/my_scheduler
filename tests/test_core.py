@@ -177,6 +177,8 @@ def test_self_test_and_error_report(tmp_path, monkeypatch):
     from scheduler import main as m
     monkeypatch.setattr(m, "app_dir", lambda: tmp_path)
     monkeypatch.setitem(sys.modules, "webview", types.ModuleType("webview"))  # GUI lib not needed for the check
+    # Pretend to be non-Windows: skips the WebView2 import and the blocking MessageBox (both covered by the exe self-test in CI)
+    monkeypatch.setattr(sys, "platform", "linux")
     out = tmp_path / "st.json"
     assert m.self_test(out) == 0 and json.loads(out.read_text())["ok"] is True
     log = m.report_error("Traceback...\nRuntimeError: boom")
