@@ -40,22 +40,27 @@ jobs:
           $p = Start-Process dist\scheduler.exe -ArgumentList '--self-test','selftest.json' -Wait -PassThru
           if (Test-Path selftest.json) { Get-Content selftest.json } else { Write-Host 'no selftest.json written' }
           if ($p.ExitCode -ne 0) { throw "self-test failed (exit $($p.ExitCode))" }
-      # The real check: start the exe and wait for its window. Prints scheduler-error.log if it crashed on startup.
+      # The real check: start the exe, wait for its window AND for the page to finish loading
+      # (scheduler-start.log gets "event: loaded"). The log is always printed so a failure shows how far startup got.
       - name: Launch the exe and confirm a window opens
         shell: pwsh
         run: |
           Start-Process (Resolve-Path dist\scheduler.exe).Path | Out-Null
-          $deadline = (Get-Date).AddSeconds(45); $win = $null
-          while ((Get-Date) -lt $deadline -and -not $win) {
+          $deadline = (Get-Date).AddSeconds(60); $win = $null; $loaded = $false
+          while ((Get-Date) -lt $deadline -and -not ($win -and $loaded)) {
             Start-Sleep 2
             $win = Get-Process scheduler -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'My Scheduler*' } | Select-Object -First 1
+            $loaded = (Test-Path dist\scheduler-start.log) -and ((Get-Content dist\scheduler-start.log -Raw) -match 'event: loaded')
             if (Test-Path dist\scheduler-error.log) { break }
           }
-          if (Test-Path dist\scheduler-error.log) { Write-Host '--- scheduler-error.log ---'; Get-Content dist\scheduler-error.log }
+          foreach ($f in 'scheduler-start.log', 'scheduler-error.log') {
+            if (Test-Path "dist\$f") { Write-Host "--- $f ---"; Get-Content "dist\$f" }
+          }
           Get-Process scheduler -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
           Get-Process scheduler -ErrorAction SilentlyContinue | Stop-Process -Force
-          if (-not $win) { throw 'no window titled "My Scheduler" appeared within 45s' }
-          Write-Host "window opened: $($win.MainWindowTitle)"
+          if (-not $win) { throw 'no window titled "My Scheduler" appeared' }
+          if (-not $loaded) { throw 'window opened but the page never finished loading (no "event: loaded" in scheduler-start.log)' }
+          Write-Host "window opened and page loaded: $($win.MainWindowTitle)"
       # Debug build with a console: run it from cmd to see the traceback if the normal exe shows nothing.
       - run: python build.py --console
       - uses: actions/upload-artifact@v4

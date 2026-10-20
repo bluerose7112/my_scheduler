@@ -1,4 +1,5 @@
 import json
+import sys
 import threading
 from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -183,3 +184,13 @@ def test_self_test_and_error_report(tmp_path, monkeypatch):
     assert m.self_test(out) == 0 and json.loads(out.read_text())["ok"] is True
     log = m.report_error("Traceback...\nRuntimeError: boom")
     assert log.parent == tmp_path and "boom" in log.read_text()
+
+
+def test_start_log_and_webview2_probe(tmp_path, monkeypatch):
+    from scheduler import main as m
+    monkeypatch.setattr(m, "app_dir", lambda: tmp_path)
+    log = m.StartLog()
+    log("hello")
+    log.f.flush()
+    assert log.path == tmp_path / "scheduler-start.log" and "hello" in log.path.read_text()
+    assert m.webview2_version() is None or sys.platform == "win32"  # only probed on Windows

@@ -1,6 +1,10 @@
+import faulthandler
 import json
+import platform
 import sys
 import tempfile
+import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -16,6 +20,52 @@ def web_dir() -> Path:
     return Path(__file__).resolve().parent / "web"
 
 
+WATCHDOG_SECONDS = 30
+WEBVIEW2_KEY = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+
+
+def message_box(text: str):
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, text, "My Scheduler", 0x10)
+
+
+def webview2_version() -> str | None:
+    """Installed WebView2 runtime version (None if not found or not on Windows)."""
+    if sys.platform != "win32":
+        return None
+    import winreg
+    for hive, key in ((winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node" + "\\" + WEBVIEW2_KEY),
+                      (winreg.HKEY_LOCAL_MACHINE, "SOFTWARE\\" + WEBVIEW2_KEY),
+                      (winreg.HKEY_CURRENT_USER, "Software\\" + WEBVIEW2_KEY)):
+        try:
+            with winreg.OpenKey(hive, key) as k:
+                return winreg.QueryValueEx(k, "pv")[0]
+        except OSError:
+            continue
+    return None
+
+
+class StartLog:
+    """scheduler-start.log: one fresh file per run, next to the exe. A windowed exe has no console, so
+    this is how we learn how far startup got on a machine where no window appears."""
+
+    def __init__(self):
+        for d in (app_dir(), Path(tempfile.gettempdir())):
+            try:
+                self.path = d / "scheduler-start.log"
+                self.f = open(self.path, "w", encoding="utf-8", buffering=1)
+                break
+            except OSError:
+                continue
+        else:  # nowhere writable: keep going without a file
+            self.path, self.f = None, None
+
+    def __call__(self, msg: str):
+        if self.f:
+            self.f.write(time.strftime("%H:%M:%S") + " " + msg + "\n")
+
+
 def report_error(exc_text: str) -> Path:
     """A windowed .exe has no console, so leave a log next to it and tell the user."""
     log = app_dir() / "scheduler-error.log"
@@ -24,11 +74,7 @@ def report_error(exc_text: str) -> Path:
     except OSError:  # e.g. the folder is read-only
         log = Path(tempfile.gettempdir()) / "scheduler-error.log"
         log.write_text(f"My Scheduler {get_version()}\n\n{exc_text}", encoding="utf-8")
-    if sys.platform == "win32":
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(
-            0, f"프로그램을 시작하지 못했습니다.\n\n{exc_text.strip().splitlines()[-1]}\n\n자세한 내용: {log}",
-            "My Scheduler", 0x10)
+    message_box(f"프로그램을 시작하지 못했습니다.\n\n{exc_text.strip().splitlines()[-1]}\n\n자세한 내용: {log}")
     return log
 
 
@@ -60,19 +106,51 @@ def self_test(out: Path) -> int:
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
         sys.exit(self_test(Path(sys.argv[2] if len(sys.argv) > 2 else app_dir() / "self-test.json")))
+    log = StartLog()
+    log(f"My Scheduler {get_version()}")
+    log(f"python {platform.python_version()}  {platform.platform()}  frozen={bool(getattr(sys, 'frozen', False))}")
+    log(f"exe: {sys.executable}")
+    if sys.platform == "win32":
+        log(f"WebView2 runtime: {webview2_version() or 'NOT FOUND (install the Evergreen runtime)'}")
+    loaded = threading.Event()
+    if log.f:
+        faulthandler.enable(log.f)  # native crashes
+        faulthandler.dump_traceback_later(WATCHDOG_SECONDS, file=log.f)  # stack of every thread if still not loaded
+    threading.excepthook = lambda a: log("thread error: " + "".join(traceback.format_exception(a.exc_type, a.exc_value, a.exc_traceback)))
+
+    def watchdog():
+        if not loaded.is_set():
+            log(f"WATCHDOG: page not loaded after {WATCHDOG_SECONDS}s (thread stacks were dumped above)")
+            message_box(f"창이 {WATCHDOG_SECONDS}초 안에 열리지 않았습니다.\n\n자세한 내용: {log.path}")
+
     try:
         import webview  # imported lazily so tests don't need it
 
+        log(f"pywebview {getattr(webview, '__version__', '?')}")
         api = Api(Store(connect()))
-        webview.create_window(
+        log("db ready")
+        window = webview.create_window(
             f"My Scheduler {get_version()}",
             str(web_dir() / "index.html"),
             js_api=api, width=1400, height=860,
         )
+        window.events.shown += lambda: log("event: shown")
+
+        def on_loaded():
+            loaded.set()
+            faulthandler.cancel_dump_traceback_later()
+            log("event: loaded")
+        window.events.loaded += on_loaded
+        t = threading.Timer(WATCHDOG_SECONDS, watchdog)
+        t.daemon = True
+        t.start()
+        log("webview.start")
         # Force WebView2 on Windows: pywebview would otherwise fall back to the old IE engine
         # (blank page) when the runtime is missing.
         webview.start(gui="edgechromium" if sys.platform == "win32" else None)
+        log("webview.start returned (window closed)")
     except Exception:
+        log("EXCEPTION:\n" + traceback.format_exc())
         report_error(traceback.format_exc())
         sys.exit(1)
 
