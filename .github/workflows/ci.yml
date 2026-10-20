@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           Start-Process (Resolve-Path dist\scheduler.exe).Path | Out-Null
-          $deadline = (Get-Date).AddSeconds(60); $win = $null; $loaded = $false
+          $deadline = (Get-Date).AddSeconds(150); $win = $null; $loaded = $false
           while ((Get-Date) -lt $deadline -and -not ($win -and $loaded)) {
             Start-Sleep 2
             $win = Get-Process scheduler -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'My Scheduler*' } | Select-Object -First 1

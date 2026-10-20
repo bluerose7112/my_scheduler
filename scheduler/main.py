@@ -20,7 +20,7 @@ def web_dir() -> Path:
     return Path(__file__).resolve().parent / "web"
 
 
-WATCHDOG_SECONDS = 30
+WATCHDOG_SECONDS = 60  # cold WebView2 start can take a long time on slow machines
 WEBVIEW2_KEY = r"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
 
@@ -121,7 +121,7 @@ def main():
     def watchdog():
         if not loaded.is_set():
             log(f"WATCHDOG: page not loaded after {WATCHDOG_SECONDS}s (thread stacks were dumped above)")
-            message_box(f"창이 {WATCHDOG_SECONDS}초 안에 열리지 않았습니다.\n\n자세한 내용: {log.path}")
+            message_box(f"창이 {WATCHDOG_SECONDS}초가 지나도록 아직 열리지 않았습니다. 느린 PC에서는 계속 로딩 중일 수 있습니다.\n\n자세한 내용: {log.path}")
 
     try:
         import webview  # imported lazily so tests don't need it

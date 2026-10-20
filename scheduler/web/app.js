@@ -18,7 +18,11 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 // pywebview in the exe; plain HTTP shim when run via `python -m scheduler.devserver`
 async function call(name, ...args) {
   let res;
-  if (window.pywebview && window.pywebview.api) res = await window.pywebview.api[name](...args);
+  if (window.pywebview) {
+    const fn = window.pywebview.api && window.pywebview.api[name];
+    if (typeof fn !== "function") throw new Error(`백엔드 API가 준비되지 않았습니다: ${name}`);
+    res = await fn(...args);
+  }
   else res = await (await fetch("/api/" + name, {method:"POST", body: JSON.stringify(args)})).json();
   if (!res.ok) { setStatus(res.error, true); throw new Error(res.error); }
   return res.data;
@@ -381,7 +385,9 @@ async function init() {
 // Start once the backend is reachable. pywebview injects its api at an unpredictable moment (before or after this
 // script, and "pywebviewready" may already have fired), so poll for it instead of trusting the event alone.
 let booted = false;
-const apiReady = () => !!(window.pywebview && window.pywebview.api);
+// pywebview creates window.pywebview with api = {} first and only fills in the methods (then fires "pywebviewready")
+// afterwards, so "the object exists" is not "ready": wait until one of our methods is really there.
+const apiReady = () => !!(window.pywebview && window.pywebview.api && typeof window.pywebview.api.version === "function");
 async function boot() {
   if (booted) return;
   booted = true;
