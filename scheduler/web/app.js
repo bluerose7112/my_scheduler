@@ -378,5 +378,29 @@ async function init() {
   document.title = "My Scheduler " + $("#version").textContent;
   await reload();
 }
-if (window.pywebview) window.addEventListener("pywebviewready", init);
-else window.addEventListener("DOMContentLoaded", () => setTimeout(() => window.pywebview ? null : init(), 100));
+// Start once the backend is reachable. pywebview injects its api at an unpredictable moment (before or after this
+// script, and "pywebviewready" may already have fired), so poll for it instead of trusting the event alone.
+let booted = false;
+const apiReady = () => !!(window.pywebview && window.pywebview.api);
+async function boot() {
+  if (booted) return;
+  booted = true;
+  try {
+    await init();
+    call("ui_ready").catch(() => {});   // lands in scheduler-start.log: the UI really rendered
+  } catch (e) {
+    $("#view").innerHTML = `<div class="empty">화면을 시작하지 못했습니다.<br><small>${esc(e && e.message || e)}</small></div>`;
+    call("ui_error", String(e && e.stack || e)).catch(() => {});
+  }
+}
+function waitForBackend() {
+  if (apiReady()) return boot();
+  window.addEventListener("pywebviewready", boot);
+  const t0 = Date.now(), timer = setInterval(() => {
+    const waited = Date.now() - t0;
+    // no pywebview at all after a grace period = plain browser (dev server, HTTP fallback); otherwise give it up to 15s
+    if (apiReady() || (!window.pywebview && waited > 1500) || waited > 15000) { clearInterval(timer); boot(); }
+  }, 100);
+}
+if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", waitForBackend);
+else waitForBackend();

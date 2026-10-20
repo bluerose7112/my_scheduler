@@ -194,3 +194,11 @@ def test_start_log_and_webview2_probe(tmp_path, monkeypatch):
     log.f.flush()
     assert log.path == tmp_path / "scheduler-start.log" and "hello" in log.path.read_text()
     assert m.webview2_version() is None or sys.platform == "win32"  # only probed on Windows
+
+
+def test_ui_ready_and_error_are_logged(store):
+    lines = []
+    api = Api(store, log=lines.append)
+    assert api.ui_ready()["ok"] and api.ui_error("boom")["ok"]
+    assert lines == ["event: ui ready", "UI ERROR: boom"]
+    assert Api(store).ui_ready()["ok"]  # no log sink: still fine

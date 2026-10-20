@@ -40,8 +40,8 @@ jobs:
           $p = Start-Process dist\scheduler.exe -ArgumentList '--self-test','selftest.json' -Wait -PassThru
           if (Test-Path selftest.json) { Get-Content selftest.json } else { Write-Host 'no selftest.json written' }
           if ($p.ExitCode -ne 0) { throw "self-test failed (exit $($p.ExitCode))" }
-      # The real check: start the exe, wait for its window AND for the page to finish loading
-      # (scheduler-start.log gets "event: loaded"). The log is always printed so a failure shows how far startup got.
+      # The real check: start the exe, wait for its window AND for the app UI to initialize
+      # (scheduler-start.log gets "event: ui ready" once app.js rendered). The log is always printed so a failure shows how far startup got.
       - name: Launch the exe and confirm a window opens
         shell: pwsh
         run: |
@@ -50,7 +50,7 @@ jobs:
           while ((Get-Date) -lt $deadline -and -not ($win -and $loaded)) {
             Start-Sleep 2
             $win = Get-Process scheduler -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'My Scheduler*' } | Select-Object -First 1
-            $loaded = (Test-Path dist\scheduler-start.log) -and ((Get-Content dist\scheduler-start.log -Raw) -match 'event: loaded')
+            $loaded = (Test-Path dist\scheduler-start.log) -and ((Get-Content dist\scheduler-start.log -Raw) -match 'event: ui ready')
             if (Test-Path dist\scheduler-error.log) { break }
           }
           foreach ($f in 'scheduler-start.log', 'scheduler-error.log') {
@@ -59,7 +59,7 @@ jobs:
           Get-Process scheduler -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
           Get-Process scheduler -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not $win) { throw 'no window titled "My Scheduler" appeared' }
-          if (-not $loaded) { throw 'window opened but the page never finished loading (no "event: loaded" in scheduler-start.log)' }
+          if (-not $loaded) { throw 'window opened but the UI never initialized (no "event: ui ready" in scheduler-start.log)' }
           Write-Host "window opened and page loaded: $($win.MainWindowTitle)"
       # Debug build with a console: run it from cmd to see the traceback if the normal exe shows nothing.
       - run: python build.py --console

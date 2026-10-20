@@ -127,7 +127,7 @@ def main():
         import webview  # imported lazily so tests don't need it
 
         log(f"pywebview {getattr(webview, '__version__', '?')}")
-        api = Api(Store(connect()))
+        api = Api(Store(connect()), log=log)
         log("db ready")
         window = webview.create_window(
             f"My Scheduler {get_version()}",

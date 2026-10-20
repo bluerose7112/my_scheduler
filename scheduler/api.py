@@ -15,8 +15,19 @@ def _wrap(fn):
 
 
 class Api:
-    def __init__(self, store: Store):
+    def __init__(self, store: Store, log=None):
         self._s = store
+        self._log = log or (lambda msg: None)  # the exe's scheduler-start.log
+
+    @_wrap
+    def ui_ready(self):
+        self._log("event: ui ready")
+        return True
+
+    @_wrap
+    def ui_error(self, message):
+        self._log("UI ERROR: " + str(message))
+        return True
 
     @_wrap
     def version(self):
