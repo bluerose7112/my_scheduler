@@ -40,6 +40,29 @@ jobs:
           $p = Start-Process dist\scheduler.exe -ArgumentList '--self-test','selftest.json' -Wait -PassThru
           if (Test-Path selftest.json) { Get-Content selftest.json } else { Write-Host 'no selftest.json written' }
           if ($p.ExitCode -ne 0) { throw "self-test failed (exit $($p.ExitCode))" }
+      # The real check: start the exe and wait for its window. Prints scheduler-error.log if it crashed on startup.
+      - name: Launch the exe and confirm a window opens
+        shell: pwsh
+        run: |
+          Start-Process (Resolve-Path dist\scheduler.exe).Path | Out-Null
+          $deadline = (Get-Date).AddSeconds(45); $win = $null
+          while ((Get-Date) -lt $deadline -and -not $win) {
+            Start-Sleep 2
+            $win = Get-Process scheduler -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like 'My Scheduler*' } | Select-Object -First 1
+            if (Test-Path dist\scheduler-error.log) { break }
+          }
+          if (Test-Path dist\scheduler-error.log) { Write-Host '--- scheduler-error.log ---'; Get-Content dist\scheduler-error.log }
+          Get-Process scheduler -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, MainWindowTitle -AutoSize | Out-String | Write-Host
+          Get-Process scheduler -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $win) { throw 'no window titled "My Scheduler" appeared within 45s' }
+          Write-Host "window opened: $($win.MainWindowTitle)"
+      # Debug build with a console: run it from cmd to see the traceback if the normal exe shows nothing.
+      - run: python build.py --console
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-console-exe
+          path: dist/scheduler-console.exe
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: scheduler-exe
