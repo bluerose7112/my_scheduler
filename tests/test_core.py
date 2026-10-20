@@ -169,3 +169,15 @@ def test_ui_settings_roundtrip(store):
     store.set_settings({"ui_sidebar": "0", "ui_project": "P1", "evil": "x"})
     s = store.get_settings()
     assert s["ui_sidebar"] == "0" and s["ui_project"] == "P1" and "evil" not in s
+
+
+def test_self_test_and_error_report(tmp_path, monkeypatch):
+    import sys
+    import types
+    from scheduler import main as m
+    monkeypatch.setattr(m, "app_dir", lambda: tmp_path)
+    monkeypatch.setitem(sys.modules, "webview", types.ModuleType("webview"))  # GUI lib not needed for the check
+    out = tmp_path / "st.json"
+    assert m.self_test(out) == 0 and json.loads(out.read_text())["ok"] is True
+    log = m.report_error("Traceback...\nRuntimeError: boom")
+    assert log.parent == tmp_path and "boom" in log.read_text()

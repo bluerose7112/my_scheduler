@@ -1,7 +1,8 @@
 """Build scheduler.exe with PyInstaller. Bakes the git version into the bundle.
 
     pip install -r requirements-dev.txt
-    python build.py
+    python build.py            # dist/scheduler.exe
+    python build.py --console  # dist/scheduler-console.exe (shows a console, for debugging)
 """
 import os
 import subprocess
@@ -15,13 +16,14 @@ VFILE = ROOT / "scheduler" / "_version.py"
 
 
 def main():
+    console = "--console" in sys.argv  # debug build: keeps a console window so errors are visible
     version = git_version(ROOT) or "dev"
     print("version:", version)
     VFILE.write_text(f'VERSION = "{version}"\n', encoding="utf-8")
     try:
         subprocess.run([
-            sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed",
-            "--name", "scheduler",
+            sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile", "--console" if console else "--windowed",
+            "--name", "scheduler-console" if console else "scheduler",
             "--add-data", f"{ROOT / 'scheduler' / 'web'}{os.pathsep}scheduler/web",
             str(ROOT / "run.py"),
         ], cwd=ROOT, check=True)
