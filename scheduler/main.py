@@ -39,9 +39,13 @@ def self_test(out: Path) -> int:
         res["web_files"] = sorted(p.name for p in web_dir().iterdir())
         assert "index.html" in res["web_files"], "index.html missing from bundle"
         with tempfile.TemporaryDirectory() as d:
-            api = Api(Store(connect(Path(d) / "t.db")))
-            api.create("project", "self-test")
-            assert api.tree()["data"][0]["title"] == "self-test"
+            conn = connect(Path(d) / "t.db")
+            try:
+                api = Api(Store(conn))
+                api.create("project", "self-test")
+                assert api.tree()["data"][0]["title"] == "self-test"
+            finally:
+                conn.close()  # Windows cannot delete the temp dir while the db file is open
         import webview  # noqa: F401  (pywebview itself)
         if sys.platform == "win32":
             import webview.platforms.edgechromium  # noqa: F401  (WebView2 backend + pythonnet)
