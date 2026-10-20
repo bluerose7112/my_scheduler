@@ -28,11 +28,11 @@ python build.py        # dist/scheduler.exe
 버전 표기는 `git describe` 기반: `v1.2.0`(태그 일치), `v1.2.0(+3)`(태그 후 3커밋), 끝의 `+`는 dirty(미커밋 변경).
 
 ## CI / 릴리스
-- `.github/workflows/ci.yml`: 푸시/PR마다 pytest(Linux) + Windows `.exe` 빌드 검증(artifact 7일 보관).
-- `.github/workflows/release.yml`: `v*` 태그를 푸시하면 Windows에서 테스트 → 빌드 → 임베드된 버전이 태그와 일치하는지 확인 → GitHub Release에 `scheduler.exe` 첨부.
-```
-git tag v0.1.0 && git push origin v0.1.0
-```
+- `.github/workflows/ci.yml`: 푸시/PR마다 pytest(Linux·Windows) + Windows `.exe` 빌드 후 **실행 검증**(창이 뜨고 화면이 초기화되는지, `scheduler-start.log`로 확인). 산출물(`scheduler-exe`, 디버그용 `scheduler-console-exe`)은 7일 보관.
+- `.github/workflows/release.yml`: 테스트 → 빌드(버전 임베드) → 버전이 태그와 일치하는지 확인 → GitHub Release에 `scheduler.exe` 첨부. 릴리스는 두 가지 방법으로 만듭니다.
+  1. **Actions 버튼(권장)**: 저장소의 **Actions → Release → Run workflow**에서 `main`을 선택하고 버전(예: `v0.2.0`)을 입력합니다. `main`의 최신 커밋에 태그가 만들어지고 릴리스가 올라갑니다. `main`이 아니거나, `v1.2.3` 형식이 아니거나, 이미 있는 태그면 실행이 거부됩니다.
+  2. **태그 푸시**: `git tag -a v0.2.0 -m v0.2.0 && git push origin v0.2.0`
+- 클라우드 세션(Claude Code on the web)의 프록시는 태그 푸시를 허용하지 않으므로, 거기서 작업할 때는 위 1번을 쓰면 됩니다.
 
 ## 테스트
 `python -m pytest`

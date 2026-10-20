@@ -1,8 +1,18 @@
 name: Release
 
+# Two ways to cut a release:
+#  1) push a tag:   git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3
+#  2) Actions tab -> Release -> "Run workflow" -> enter the version (creates the tag on main's latest commit).
+# Either way the exe is tested, built with exactly this version embedded, and attached to a GitHub release.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New release version / tag, e.g. v0.2.0 (created on the latest commit of main)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -10,10 +20,32 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
     steps:
+      - name: Validate the request (manual run only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Run this workflow from the main branch (selected: $GITHUB_REF)"; exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like v1.2.3 (got: $VERSION)"; exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # git describe needs tags/history for the embedded version
+      - name: Refuse an existing tag, then tag locally so the exe embeds this version (manual run only)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::tag $VERSION already exists; pick a new version"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "$VERSION"   # local to this runner; the release step below publishes the tag
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -24,8 +56,10 @@ jobs:
         shell: bash
         run: |
           test -f dist/scheduler.exe
-          python -c "from scheduler.version import git_version; v=git_version(); print(v); assert v == '$GITHUB_REF_NAME', v"
+          python -c "import os; from scheduler.version import git_version; v=git_version(); print(v); assert v == os.environ['VERSION'], (v, os.environ['VERSION'])"
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}   # used only when the tag does not exist yet (manual run)
           files: dist/scheduler.exe
           generate_release_notes: true
