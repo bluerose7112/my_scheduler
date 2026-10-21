@@ -3,9 +3,26 @@
 과제(project) → 아이템(item) → 서브아이템(subitem) 계층의 JIRA 스타일 스케줄러.
 pywebview + SQLite. 입력은 **로컬 LLM**(OpenAI 호환 `/chat/completions`)로 대신합니다.
 
-## 실행
+## 개발 환경 준비 (`.venv`)
+Python 3.10 이상이 필요합니다(CI·릴리스는 3.12로 빌드하므로 3.12 권장). 모든 명령은 저장소 루트에서 **`.venv` 가상환경을 켠 상태**로 실행하는 것을 기본으로 합니다.
+
 ```
-pip install -r requirements.txt
+python -m venv .venv                  # 최초 1회: 가상환경 만들기
+
+.venv\Scripts\Activate.ps1            # Windows PowerShell
+.venv\Scripts\activate.bat            # Windows cmd
+source .venv/bin/activate             # macOS / Linux
+
+pip install -r requirements-dev.txt   # 실행 + 빌드 + 테스트에 필요한 패키지 전부
+```
+- 프롬프트 앞에 `(.venv)`가 보이면 켜진 것입니다. 끄려면 `deactivate`.
+- PowerShell에서 "스크립트 실행이 비활성화되어 있습니다" 오류가 나면 한 번만 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`를 실행하거나 cmd 방식을 쓰세요.
+- 켜지 않고 쓰려면 `.venv\Scripts\python`(Windows) / `.venv/bin/python`(macOS·Linux)으로 직접 실행합니다.
+- 실행만 할 때는 `requirements.txt`만 설치해도 됩니다. 의존성을 바꾸면 `.venv`를 지우고 다시 만드는 것이 가장 확실합니다.
+
+## 실행
+`.venv`를 켠 상태에서(위 "개발 환경 준비" 참고):
+```
 python run.py                     # 데스크톱 창 (pywebview)
 python -m scheduler.devserver     # 브라우저 개발용 (http://127.0.0.1:8765)
 ```
@@ -21,9 +38,10 @@ DB는 실행 파일(.exe) 옆 `scheduler.db`에 생성됩니다 (개발 시 저�
 - “LLM 설정”: 서버 주소(예: LM Studio `http://localhost:1234/v1`, Ollama `http://localhost:11434/v1`), 프로토콜, 모델, 타임아웃.
 
 ## 빌드 (.exe)
+`.venv`를 켠 상태에서(빌드는 지금 켠 가상환경의 Python과 패키지로 만들어집니다):
 ```
-pip install -r requirements-dev.txt
-python build.py        # dist/scheduler.exe
+python build.py                # dist/scheduler.exe
+python build.py --console      # dist/scheduler-console.exe (콘솔이 붙은 디버그용: 오류가 화면에 출력됨)
 ```
 버전 표기는 `git describe` 기반: `v1.2.0`(태그 일치), `v1.2.0(+3)`(태그 후 3커밋), 끝의 `+`는 dirty(미커밋 변경).
 
@@ -35,4 +53,7 @@ python build.py        # dist/scheduler.exe
 - 클라우드 세션(Claude Code on the web)의 프록시는 태그 푸시를 허용하지 않으므로, 거기서 작업할 때는 위 1번을 쓰면 됩니다.
 
 ## 테스트
-`python -m pytest`
+`.venv`를 켠 상태에서:
+```
+python -m pytest
+```
